@@ -6,6 +6,7 @@ import std/asyncdispatch
 import std/httpclient
 import std/json
 import std/strformat
+import std/strutils
 
 const overpassUrl = "https://overpass-api.de/api/interpreter"
 
@@ -32,6 +33,8 @@ proc jsonToLocations*(data: JsonNode): seq[Location] {.raises: [].} =
           loc.file = "cities"
         if item["tags"].hasKey "aeroway":
           loc.file = "airports"
+        if item["tags"].hasKey "ele":
+          loc.ele = item["tags"]["ele"].getStr().parseInt()
 
         result.add loc
   except Exception as e:

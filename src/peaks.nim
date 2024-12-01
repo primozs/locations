@@ -13,11 +13,11 @@ import pkg/progress
 import pkg/results
 
 
-const OverpassUrl = "https://overpass-api.de/api/interpreter"
-  const LatBounds: tuple[a: float, b: float] = (-90.0, 90.0)
-  const LonBounds: tuple[a: float, b: float] = (-180.0, 180.0)
-# const LatBounds: tuple[a: float, b: float] = (45.20, 46.40)
-# const LonBounds: tuple[a: float, b: float] = (12.50, 16.50)
+# const LatBounds: tuple[a: float, b: float] = (-90.0, 90.0)
+# const LonBounds: tuple[a: float, b: float] = (-180.0, 180.0)
+
+const LatBounds: tuple[a: float, b: float] = (45.20, 46.40)
+const LonBounds: tuple[a: float, b: float] = (12.50, 16.50)
 
 const Step = 0.5
 
@@ -53,7 +53,11 @@ proc storeResults(data: seq[Location]) =
   try:
     let workingDir = getCurrentDir() / "data"
     let dataPath = workingDir / "data.json"
+    if dataPath.fileExists():
+      dataPath.removeFile()
+
     f = open(dataPath, fmWrite)
+    # f.write(( %* data).pretty())
     f.write( %* data)
   except Exception as e:
     logError("Write data error ", e.repr)

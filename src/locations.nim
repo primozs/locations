@@ -17,6 +17,7 @@ type Location* = object
   lat*: float
   lon*: float
   file*: string
+  ele*: int = -1
 
 const locationsFilename = "locations.json"
 
@@ -60,7 +61,7 @@ proc downloadLocations(path: string) {.async.} =
     file = open(locationsPath, fmWrite)
     file.write( %* data)
   except Exception as e:
-    echo e.name
+    echo e.repr
   finally:
     file.close()
 
@@ -70,11 +71,12 @@ proc setupLocation*(path: string) {.raises: [].} =
       path.createDir()
 
     let locationsPath = path / locationsFilename
+    # locationsPath.removeFile()
     if not locationsPath.fileExists():
       echo "Installing locations data"
       waitFor downloadLocations(path)
-  except:
-    echo getCurrentExceptionMsg()
+  except Exception as e:
+    echo e.repr
 
 proc readLocations(path: string): seq[Location] {.raises: [].} =
   var file: File
@@ -89,7 +91,7 @@ proc readLocations(path: string): seq[Location] {.raises: [].} =
     let locJson = text.parseJson()
     result = locJson.to(seq[Location])
   except Exception as e:
-    echo e.name
+    echo e.repr
   finally:
     file.close()
 

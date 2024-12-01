@@ -9,7 +9,7 @@ import std/strformat
 
 const overpassUrl = "https://overpass-api.de/api/interpreter"
 
-proc jsonToLocations(data: JsonNode): seq[Location] {.raises: [].} =
+proc jsonToLocations*(data: JsonNode): seq[Location] {.raises: [].} =
   try:
     if data["elements"].kind == JArray:
       for item in data["elements"]:
@@ -49,15 +49,14 @@ proc getQuery(lon: float, lat: float): string {.raises: [].} =
   out center;
   """
 
-proc searchOverpass*(lon: float, lat: float): seq[Location] {.raises: [].} =
+proc overpassQuery*(query: string): JsonNode {.raises: [].} =
   var client: HttpClient
   try:
-    let query = getQuery(lon, lat)
     client = newHttpClient()
     client.headers = newHttpHeaders({"Content-Type": "application/json"})
     let res = client.post(url = overpassUrl, body = "data=" & query)
     let resJson = res.body.parseJson()
-    result = jsonToLocations(resJson)
+    result = resJson
   except Exception as e:
     echo e.repr
   finally:
@@ -66,25 +65,40 @@ proc searchOverpass*(lon: float, lat: float): seq[Location] {.raises: [].} =
     except:
       echo getCurrentExceptionMsg()
 
-proc searchOverpassAsync(lon: float, lat: float): Future[seq[
-    Location]] {.async.} =
+
+proc overpassQueryAsync*(query: string): Future[JsonNode] {.async.} =
   var client: AsyncHttpClient
   try:
-    let query = getQuery(lon, lat)
     client = newAsyncHttpClient()
     client.headers = newHttpHeaders({"Content-Type": "application/json"})
     let res = await client.post(url = overpassUrl, body = "data=" & query)
     let resBody = await body (res)
     let resJson = resBody.parseJson()
-    result = jsonToLocations(resJson)
+    result = resJson
   except Exception as e:
     echo e.repr
   finally:
     client.close()
 
 
+proc searchLocationsOverpass*(lon: float, lat: float): seq[Location] {.raises: [].} =
+  let query = getQuery(lon, lat)
+  let resJson = overpassQuery(query)
+  result = jsonToLocations(resJson)
+
+
+proc searchLocationOverpassAsync*(lon: float, lat: float): Future[seq[
+    Location]] {.async.} =
+  try:
+    let query = getQuery(lon, lat)
+    let resJson = await overpassQueryAsync(query)
+    result = jsonToLocations(resJson)
+  except Exception as e:
+    echo e.repr
+
+
 when isMainModule:
-  echo searchOverpass(14.01362, 46.2326)
-  echo waitFor searchOverpassAsync(14.454425, 46.312227)
+  echo searchLocationsOverpass(14.01362, 46.2326)
+  echo waitFor searchLocationOverpassAsync(14.454425, 46.312227)
 
 

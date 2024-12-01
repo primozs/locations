@@ -12,24 +12,26 @@ type BaseLocation = object
   lat: float
   lon: float
 
-type Location = object
-  name: string
-  lat: float
-  lon: float
-  file: string
+type Location* = object
+  name*: string
+  lat*: float
+  lon*: float
+  file*: string
 
 const locationsFilename = "locations.json"
 
 proc getHttpResponse(url: string): Future[seq[
     BaseLocation]] {.async.} =
+  let client = newAsyncHttpClient()
   try:
-    let client = newAsyncHttpClient()
     let res = await client.getContent(url)
     let resJson = res.parseJson()
     result = resJson.to(seq[BaseLocation])
-  except Exception as e:
+  except Exception:
     echo getCurrentExceptionMsg()
     echo url
+  finally:
+    client.close()
 
 proc downloadLocations(path: string) {.async.} =
   let locationsPath = path / locationsFilename

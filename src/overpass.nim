@@ -34,7 +34,7 @@ proc jsonToLocations*(data: JsonNode): seq[Location] {.raises: [].} =
         if item["tags"].hasKey "aeroway":
           loc.file = "airports"
         if item["tags"].hasKey "ele":
-          loc.ele = item["tags"]["ele"].getStr().parseInt()
+          loc.ele = item["tags"]["ele"].getStr().strip().parseFloat().toInt()
 
         result.add loc
   except Exception as e:

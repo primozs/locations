@@ -13,6 +13,8 @@ import pkg/progress
 import pkg/results
 
 
+const OverpassUrl = "http://88.99.57.50:12346/api/interpreter"
+
 # const LatBounds: tuple[a: float, b: float] = (-90.0, 90.0)
 # const LonBounds: tuple[a: float, b: float] = (-180.0, 180.0)
 
@@ -43,7 +45,7 @@ proc processBox(latMin: float, lonMin: float, latMax: float,
     );
     out center;
   """
-  let resJson = await overpassQueryAsync(query)
+  let resJson = await overpassQueryAsync(query, OverpassUrl)
   let locs = jsonToLocations(resJson)
   cb()
   result = locs

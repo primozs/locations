@@ -8,7 +8,7 @@ import std/json
 import std/strformat
 import std/strutils
 
-const overpassUrl = "https://overpass-api.de/api/interpreter"
+const OverpassUrl = "https://overpass-api.de/api/interpreter"
 
 proc jsonToLocations*(data: JsonNode): seq[Location] {.raises: [].} =
   try:
@@ -52,12 +52,12 @@ proc getQuery(lon: float, lat: float): string {.raises: [].} =
   out center;
   """
 
-proc overpassQuery*(query: string): JsonNode {.raises: [].} =
+proc overpassQuery*(query: string, url: string = OverpassUrl): JsonNode {.raises: [].} =
   var client: HttpClient
   try:
     client = newHttpClient()
     client.headers = newHttpHeaders({"Content-Type": "application/json"})
-    let res = client.post(url = overpassUrl, body = "data=" & query)
+    let res = client.post(url = url, body = "data=" & query)
     let resJson = res.body.parseJson()
     result = resJson
   except Exception as e:
@@ -69,12 +69,13 @@ proc overpassQuery*(query: string): JsonNode {.raises: [].} =
       echo getCurrentExceptionMsg()
 
 
-proc overpassQueryAsync*(query: string): Future[JsonNode] {.async.} =
+proc overpassQueryAsync*(query: string, url: string = OverpassUrl): Future[
+    JsonNode] {.async.} =
   var client: AsyncHttpClient
   try:
     client = newAsyncHttpClient()
     client.headers = newHttpHeaders({"Content-Type": "application/json"})
-    let res = await client.post(url = overpassUrl, body = "data=" & query)
+    let res = await client.post(url = url, body = "data=" & query)
     let resBody = await body (res)
     let resJson = resBody.parseJson()
     result = resJson
@@ -84,17 +85,18 @@ proc overpassQueryAsync*(query: string): Future[JsonNode] {.async.} =
     client.close()
 
 
-proc searchLocationsOverpass*(lon: float, lat: float): seq[Location] {.raises: [].} =
+proc searchLocationsOverpass*(lon: float, lat: float,
+    url: string = OverpassUrl): seq[Location] {.raises: [].} =
   let query = getQuery(lon, lat)
-  let resJson = overpassQuery(query)
+  let resJson = overpassQuery(query, url)
   result = jsonToLocations(resJson)
 
 
-proc searchLocationOverpassAsync*(lon: float, lat: float): Future[seq[
-    Location]] {.async.} =
+proc searchLocationOverpassAsync*(lon: float, lat: float,
+    url: string = OverpassUrl): Future[seq[Location]] {.async.} =
   try:
     let query = getQuery(lon, lat)
-    let resJson = await overpassQueryAsync(query)
+    let resJson = await overpassQueryAsync(query, url)
     result = jsonToLocations(resJson)
   except Exception as e:
     echo e.repr

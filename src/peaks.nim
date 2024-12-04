@@ -1,4 +1,3 @@
-{.push raises: [].}
 import ./overpass
 import ./utils
 import ./locations
@@ -9,6 +8,7 @@ import std/math
 import std/os
 import std/logging
 import std/json
+import std/asyncdispatch
 import pkg/progress
 import pkg/results
 
@@ -25,16 +25,16 @@ const minLatLons = product(
  arange(LatBounds, Step),
  arange(LonBounds, Step)
 )
+const p1 = (minLatLons.len.toFloat / 100.0)
 
-proc logError*(data: varargs[string, `$`]) =
+proc logError*(data: varargs[string, `$`]) {.raises: [].} =
   try:
     error(data)
   except:
     echo "logger exception: " & getCurrentExceptionMsg()
 
 proc processBox(latMin: float, lonMin: float, latMax: float,
-    lonMax: float): seq[Location] =
-  # sleep(10)
+    lonMax: float, cb: proc ()): Future[seq[Location]] {.async.} =
   let query = fmt"""
     [out:json][timeout:25];
     (
@@ -43,12 +43,13 @@ proc processBox(latMin: float, lonMin: float, latMax: float,
     );
     out center;
   """
-  let resJson = overpassQuery(query)
+  let resJson = await overpassQueryAsync(query)
   let locs = jsonToLocations(resJson)
+  cb()
   result = locs
 
 
-proc storeResults(data: seq[Location]) =
+proc storeResults(data: seq[Location]) {.raises: [].} =
   var f: File
   try:
     let workingDir = getCurrentDir() / "data"
@@ -65,37 +66,46 @@ proc storeResults(data: seq[Location]) =
     f.close()
 
 
-proc processBoxes() =
+proc processBoxes() {.raises: [].} =
   try:
+    let tt1 = getTime()
     var bar = newProgressBar()
     bar.start()
 
-    let p1 = (minLatLons.len.toFloat / 100.0)
-    var results: seq[Location] = @[]
+    var results: seq[Future[seq[Location]]]
 
+    var count = 0
     for i, (latMin, lonMin) in minLatLons:
+      let cb = proc () =
+        let percent = (count + 1).toFloat / p1
+        bar.set(percent.toInt)
+        count.inc
+
       let latMax = latMin + Step
       let lonMax = lonMin + Step
       try:
-        let t1 = getTime()
-        let res = processBox(latMin, lonMin, latMax, lonMax)
-        results.add res
-        # concat(results, res)
-        let t2 = getTime()
+        if i mod 10 == 0:
+          sleep(1000)
+        let res = processBox(latMin, lonMin, latMax, lonMax, cb)
 
-        let duration = t2 - t1
-        let percent = (i + 1).toFloat / p1
-        bar.set(percent.toInt)
+        results.add res
       except Exception as e:
         logError(fmt"{i=} {latMin=} {lonMin=} {latMax=} {lonMax=}", e.repr)
 
-    storeResults(results)
+    let awaitedResults = waitFor all(results)
+    var locations: seq[Location] = @[]
+    for i in awaitedResults:
+      locations.add i
+
+    storeResults(locations)
     bar.finish()
+    let tt2 = getTime()
+    echo fmt"Total duration: {tt2 - tt1}"
   except Exception as e:
     logError(e.repr)
 
 
-proc main() =
+proc main() {.raises: [].} =
   try:
     let workingDir = getCurrentDir() / "data"
     let loggerPath = workingDir / "peaks.log"

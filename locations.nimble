@@ -1,12 +1,16 @@
 # Package
 
-version       = "0.1.0"
-author        = "Primoz Susa"
-description   = "A new awesome nimble package"
-license       = "MIT"
-srcDir        = "src"
+version = "0.1.0"
+author = "Primoz Susa"
+description = "A new awesome nimble package"
+license = "MIT"
+srcDir = "src"
 
+task buildpeaks, "Build peaks prod":
+  exec "nim c -d:release --mm:orc -d:danger --passC:-flto --passC:-march=native -o=bin/peaks src/peaks.nim"
 
+task buildpeaksdev, "Build peaks dev":
+  exec "nim c -o=bin/peaks src/peaks.nim"
 # Dependencies
 
 requires "nim >= 2.2.0"

@@ -10,6 +10,17 @@ import std/strutils
 
 const OverpassUrl = "https://overpass-api.de/api/interpreter"
 
+proc parseElev(elev: string): int =
+  try:
+    var e: string
+    for c in elev:
+      if c.isAlphaAscii():
+        e.add c
+    return e.parseFloat().toInt()
+  except:
+    return -1
+
+
 proc jsonToLocations*(data: JsonNode): seq[Location] {.raises: [].} =
   try:
     if data["elements"].kind == JArray:
@@ -34,7 +45,7 @@ proc jsonToLocations*(data: JsonNode): seq[Location] {.raises: [].} =
         if item["tags"].hasKey "aeroway":
           loc.file = "airports"
         if item["tags"].hasKey "ele":
-          loc.ele = item["tags"]["ele"].getStr().strip().parseFloat().toInt()
+          loc.ele = item["tags"]["ele"].getStr().parseElev()
 
         result.add loc
   except Exception as e:

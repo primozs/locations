@@ -10,7 +10,7 @@ task buildpeaks, "Build peaks prod":
   exec "nim c -d:release --mm:orc -d:danger --passC:-flto --passC:-march=native -o=bin/peaks src/peaks.nim"
 
 task buildpeaksdev, "Build peaks dev":
-  exec "nim c -o=bin/peaks src/peaks.nim"
+  exec "nim c --mm:orc -d:danger -o=bin/peaks src/peaks.nim"
 # Dependencies
 
 requires "nim >= 2.2.0"

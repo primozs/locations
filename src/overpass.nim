@@ -14,7 +14,7 @@ proc parseElev(elev: string): int =
   try:
     var e: string
     for c in elev:
-      if c.isAlphaAscii():
+      if c.isDigit():
         e.add c
     return e.parseFloat().toInt()
   except:

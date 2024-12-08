@@ -10,6 +10,8 @@ import std/json
 import std/asyncdispatch
 import pkg/progress
 import pkg/results
+import pkg/tabby
+import pkg/print
 
 
 const OverpassUrl = "http://88.99.57.50:12346/api/interpreter"
@@ -21,11 +23,11 @@ type Box = object
   latMax: float
   lonMax: float
 
-const LatBounds: Pos = (-90.0, 90.0)
-const LonBounds: Pos = (-180.0, 180.0)
+# const LatBounds: Pos = (-90.0, 90.0)
+# const LonBounds: Pos = (-180.0, 180.0)
 
-# const LatBounds: Pos = (45.20, 46.40)
-# const LonBounds: Pos = (12.50, 16.50)
+const LatBounds: Pos = (45.20, 46.40)
+const LonBounds: Pos = (12.50, 16.50)
 
 const Step = 0.5
 
@@ -59,7 +61,7 @@ proc processBox(latMin: float, lonMin: float, latMax: float,
   result = locs
 
 
-proc storeResults(data: seq[Location]) {.raises: [].} =
+proc storeResultsJson(data: seq[Location]) {.raises: [].} =
   var f: File
   try:
     let workingDir = getCurrentDir() / "data"
@@ -70,6 +72,24 @@ proc storeResults(data: seq[Location]) {.raises: [].} =
     f = open(dataPath, fmWrite)
     # f.write(( %* data).pretty())
     f.write( %* data)
+  except Exception as e:
+    logError("Write data error ", e.repr)
+  finally:
+    f.close()
+
+
+proc storeResultsCsv(data: seq[Location]) {.raises: [].} =
+  var f: File
+  try:
+    let workingDir = getCurrentDir() / "data"
+    let dataPath = workingDir / "data.csv"
+    if dataPath.fileExists():
+      dataPath.removeFile()
+
+    let csvData = toCsv(data)
+
+    f = open(dataPath, fmWrite)
+    f.write(csvData)
   except Exception as e:
     logError("Write data error ", e.repr)
   finally:
@@ -115,7 +135,7 @@ proc processBoxes() {.raises: [].} =
         locations.add i
       sleep(500)
 
-    storeResults(locations)
+    storeResultsCsv(locations)
 
     bar.finish()
     let tt2 = getTime()

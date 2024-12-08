@@ -20,3 +20,6 @@ requires "vmath >= 2.0.0"
 requires "bumpy >= 1.1.2"
 requires "progress >= 1.1.3"
 requires "results >= 0.5.0"
+
+requires "print >= 1.0.2"
+requires "tabby >= 0.6.0"

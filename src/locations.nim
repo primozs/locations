@@ -3,9 +3,12 @@ import std/asyncdispatch
 import std/httpclient
 import std/os
 import std/json
+import std/sequtils
 import pkg/spacy
 import pkg/vmath
 import pkg/bumpy
+# import pkg/tabby
+import ./csv
 
 type BaseLocation = object
   name: string
@@ -16,18 +19,27 @@ type Location* = object
   name*: string
   lat*: float
   lon*: float
-  file*: string
+  file*: string = ""
   ele*: int = -1
 
-const locationsFilename = "locations.json"
+const locationsFilename = "locations.csv"
 
-proc getHttpResponse(url: string): Future[seq[
-    BaseLocation]] {.async.} =
+proc getHttpResponse(url: string): Future[seq[Location]] {.async.} =
   let client = newAsyncHttpClient()
   try:
+    let urlParts = url.splitFile()
+    let fileName = urlParts.name
     let res = await client.getContent(url)
-    let resJson = res.parseJson()
-    result = resJson.to(seq[BaseLocation])
+
+    if url.endsWith(".json"):
+      let resJson = res.parseJson()
+      let b = resJson.to(seq[BaseLocation])
+      for i in b:
+        let l = Location(name: i.name, lat: i.lat, lon: i.lon, file: fileName)
+        result.add l
+    if url.endsWith(".csv"):
+      var resCsv = res.fromCsv(seq[Location])
+      result = resCsv
   except Exception:
     echo getCurrentExceptionMsg()
     echo url
@@ -42,9 +54,10 @@ proc downloadLocations(path: string) {.async.} =
       "https://raw.githubusercontent.com/primozs/airports-json/refs/heads/master/data/airports.json",
       "https://raw.githubusercontent.com/primozs/cities-json/refs/heads/master/data/cities.json",
       "https://raw.githubusercontent.com/primozs/pg-sites-json/refs/heads/master/data/takeoffs.json",
-      "https://raw.githubusercontent.com/primozs/pg-sites-json/refs/heads/master/data/landings.json"
+      "https://raw.githubusercontent.com/primozs/pg-sites-json/refs/heads/master/data/landings.json",
+      "https://raw.githubusercontent.com/primozs/mountain-peaks/refs/heads/master/mountain-peaks.csv"
     ]
-    var f: seq[Future[seq[BaseLocation]]]
+    var f: seq[Future[seq[Location]]]
     for item in sources:
       let future = getHttpResponse(item)
       f.add future
@@ -52,14 +65,12 @@ proc downloadLocations(path: string) {.async.} =
     let results = waitFor all(f)
     var data: seq[Location]
 
-    for i, d in results:
-      let urlParts = sources[i].splitFile()
-      let fileName = urlParts.name
-      for loc in d:
-        data.add Location(name: loc.name, lat: loc.lat, lon: loc.lon,
-            file: fileName)
+    for d in results:
+      data.add d
+
     file = open(locationsPath, fmWrite)
-    file.write( %* data)
+    let csv = data.toCsv(hasHeader = true)
+    file.write(csv)
   except Exception as e:
     echo e.repr
   finally:
@@ -88,8 +99,7 @@ proc readLocations(path: string): seq[Location] {.raises: [].} =
 
     file = open(locationsPath, fmRead)
     let text = file.readAll()
-    let locJson = text.parseJson()
-    result = locJson.to(seq[Location])
+    result = text.fromCsv(seq[Location])
   except Exception as e:
     echo e.repr
   finally:
@@ -125,6 +135,8 @@ when isMainModule:
   let confDir = getConfigDir()
   let path = confDir / appName / locationDirName
 
-  echo path.searchLocations(14.01362, 46.2326, 0.05)
-  echo path.searchLocations(14.01362, 46.2326, 0.1)
+  let resData = path.searchLocations(14.01362, 46.2326, 0.005)
+  echo resData
+  # echo resData.filterIt it.file != "natural"
+  echo path.searchLocations(14.01362, 46.2326, 0.1).filterIt it.file != "natural"
 

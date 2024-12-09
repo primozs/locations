@@ -15,5 +15,5 @@ test "search location":
   let confDir = getConfigDir()
   let path = confDir / appName / locationDirName
 
-  let res = path.searchLocations(14.01362, 46.2326, 0.05)
+  let res = path.searchLocations(14.01362, 46.2326, 0.005)
   check res.len == 2

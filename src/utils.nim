@@ -14,7 +14,7 @@ func arange*[T: int | float](start: T, stop: T, step: T): seq[T] =
     i = i + step
 
 
-func arange*[T, U](r: tuple[a: T, b: U], step: T): seq[T] =
+func arange*[T, U](r: tuple[start: T, stop: U], step: T): seq[T] =
   var i = r[0]
   while i < r[1]:
     result.add i
@@ -38,7 +38,7 @@ iterator productIt*[T, U](s1: openArray[T], s2: openArray[U]): tuple[a: T, b: U]
     for b in s2:
       yield (a, b)
 
-func product*[T, U](s1: openArray[T], s2: openArray[U]): seq[tuple[a: T, b: U]] =
+func product*[T, U](s1: openArray[T], s2: openArray[U]): seq[tuple[start: T, stop: U]] =
   for a in s1:
     for b in s2:
       result.add (a, b)

@@ -1,168 +1,126 @@
 import ./overpass
 import ./utils
 import ./locations
+import ./processor
 import std/strformat
-import std/times
 import std/math
 import std/os
-import std/logging
-import std/json
 import std/asyncdispatch
-import pkg/progress
-import pkg/results
-import pkg/tabby
-import pkg/print
+import std/json
 
 
-const OverpassUrl = "http://88.99.57.50:12346/api/interpreter"
+type FromTo = tuple[start: float, stop: float]
 
-type Pos = tuple[a: float, b: float]
+proc `%`(p: FromTo): JsonNode =
+  var res = newJObject()
+  res["start"] = newJFloat(p.start)
+  res["stop"] = newJFloat(p.stop)
+  return res
+
+
 type Box = object
   latMin: float
   lonMin: float
   latMax: float
   lonMax: float
 
-# const LatBounds: Pos = (-90.0, 90.0)
-# const LonBounds: Pos = (-180.0, 180.0)
-
-const LatBounds: Pos = (45.20, 46.40)
-const LonBounds: Pos = (12.50, 16.50)
-
-const Step = 0.5
-
-const minLatLons = product(
- arange(LatBounds, Step),
- arange(LonBounds, Step)
-)
-const p1 = (minLatLons.len.toFloat / 100.0)
+type Config = object
+  LatBounds: FromTo = (-90.0, 90.0)
+  LonBounds: FromTo = (-180.0, 180.0)
+  # LatBounds: FromTo = (45.20, 46.40)
+  # LonBounds: FromTo = (12.50, 16.50)
+  Step: float = 0.5
+  Chunks: int = 10
+  OverpassUrl: string = "http://88.99.57.50:12346/api/interpreter"
+  ContinueWork: bool = true
+  LastChunkIndex: int = -1
 
 
-proc logError*(data: varargs[string, `$`]) {.raises: [].} =
-  try:
-    error(data)
-  except:
-    echo "logger exception: " & getCurrentExceptionMsg()
-
-
-proc processBox(latMin: float, lonMin: float, latMax: float,
-    lonMax: float, cb: proc ()): Future[seq[Location]] {.async.} =
+proc processBox(overpassUrl: string, box: Box, cb: proc ()): Future[seq[
+        Location]] {.async.} =
   let query = fmt"""
     [out:json][timeout:25];
     (
       node["name"]["ele"]["natural"~"peak|hill|ridge|saddle|volcano"]
-      ({latMin},{lonMin},{latMax},{lonMax});
+      ({box.latMin},{box.lonMin},{box.latMax},{box.lonMax});
     );
     out center;
   """
-  let resJson = await overpassQueryAsync(query, OverpassUrl)
+  let resJson = await overpassQueryAsync(query, overpassUrl)
   let locs = jsonToLocations(resJson)
   cb()
   result = locs
 
 
-proc storeResultsJson(data: seq[Location]) {.raises: [].} =
-  var f: File
-  try:
-    let workingDir = getCurrentDir() / "data"
-    let dataPath = workingDir / "data.json"
-    if dataPath.fileExists():
-      dataPath.removeFile()
-
-    f = open(dataPath, fmWrite)
-    # f.write(( %* data).pretty())
-    f.write( %* data)
-  except Exception as e:
-    logError("Write data error ", e.repr)
-  finally:
-    f.close()
-
-
-proc storeResultsCsv(data: seq[Location]) {.raises: [].} =
-  var f: File
-  try:
-    let workingDir = getCurrentDir() / "data"
-    let dataPath = workingDir / "data.csv"
-    if dataPath.fileExists():
-      dataPath.removeFile()
-
-    let csvData = toCsv(data)
-
-    f = open(dataPath, fmWrite)
-    f.write(csvData)
-  except Exception as e:
-    logError("Write data error ", e.repr)
-  finally:
-    f.close()
-
-
-iterator chunckedBoxes(data: seq[Pos]): seq[Box] =
-  for chunk in chunked(data, 10):
+iterator chunckedBoxes(config: Config, data: seq[FromTo]): tuple[i: int, b: seq[Box]] =
+  var count = -1
+  for chunk in chunked(data, config.Chunks):
     var boxChunk: seq[Box] = @[]
     for (latMin, lonMin) in chunk:
-      let latMax = latMin + Step
-      let lonMax = lonMin + Step
+      let latMax = latMin + config.Step
+      let lonMax = lonMin + config.Step
       let b = Box(latMin: latMin, lonMin: lonMin, latMax: latMax,
           lonMax: lonMax)
       boxChunk.add b
-    yield boxChunk
 
-
-proc processBoxes() {.raises: [].} =
-  try:
-    let tt1 = getTime()
-    var bar = newProgressBar()
-    bar.start()
-
-    var count = 0
-    let calcPercent = proc () =
-      let percent = (count + 1).toFloat / p1
-      bar.set(percent.toInt)
-      count.inc
-
-    var locations: seq[Location]
-    for boxes in chunckedBoxes(minLatLons):
-      var results: seq[Future[seq[Location]]]
-      for box in boxes:
-        try:
-          let res = processBox(box.latMin, box.lonMin, box.latMax, box.lonMax, calcPercent)
-          results.add res
-        except Exception as e:
-          logError(fmt"{box.repr=}: ", e.repr)
-
-      let awaitedResults = waitFor all(results)
-      for i in awaitedResults:
-        locations.add i
-      sleep(500)
-
-    storeResultsCsv(locations)
-
-    bar.finish()
-    let tt2 = getTime()
-    echo fmt"Total duration: {tt2 - tt1}"
-  except Exception as e:
-    logError(e.repr)
+    count.inc
+    yield (count, boxChunk)
 
 
 proc main() {.raises: [].} =
   try:
-    let workingDir = getCurrentDir() / "data"
-    let loggerPath = workingDir / "peaks.log"
-    if not workingDir.dirExists():
-      workingDir.createDir()
+    let p = initProcessor(name = "peaks")
+    var config = Config()
 
-    var consoleLog = newConsoleLogger()
-      .catch.expect("Console logger to be created")
-    var rollingLog = newRollingFileLogger(loggerPath)
-      .catch.expect("Rolling logger to be created")
+    if not p.configPath.fileExists():
+      saveConfig[Config](p, config)
 
-    addHandler(consoleLog)
-    addHandler(rollingLog)
+    config = loadConfig[Config](p)
 
-    processBoxes()
+    let outputFilePath = p.outputDir / "data.csv"
+    if outputFilePath.fileExists() and config.ContinueWork == false:
+      outputFilePath.removeFile()
+
+    let minLatLons = product(
+     arange(config.LatBounds, config.Step),
+     arange(config.LonBounds, config.Step)
+    )
+
+    timing "Total duration":
+      progressBar minLatLons.len:
+        for (chunkIndex, boxes) in chunckedBoxes(config, minLatLons):
+          if config.ContinueWork and chunkIndex <= config.LastChunkIndex:
+            progressCalc()
+            continue
+
+          var locations: seq[Location]
+          var results: seq[Future[seq[Location]]]
+          for box in boxes:
+            try:
+              let res = processBox(config.OverpassUrl, box, progressCalc)
+              results.add res
+            except Exception as e:
+              logError(fmt"{box.repr=}: ", e.repr)
+
+          let awaitedResults = waitFor all(results)
+          for i in awaitedResults:
+            locations.add i
+
+          let hasHeader = chunkIndex == 0
+          saveCsvData[seq[Location]](p, "data", locations, hasHeader)
+
+          config.LastChunkIndex = chunkIndex
+          saveConfig(p, config)
+          sleep(10)
+
+        # processing finished, reset done index
+        config.LastChunkIndex = -1
+        saveConfig(p, config)
   except Exception as e:
     logError(e.repr)
 
 
 when isMainModule:
   main()
+
+

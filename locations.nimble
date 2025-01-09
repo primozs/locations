@@ -23,3 +23,4 @@ requires "results >= 0.5.0"
 
 requires "print >= 1.0.2"
 requires "tabby >= 0.6.0"
+requires "git@github.com:primozs/osm_utils.git >= 0.1.0"
